@@ -10,10 +10,10 @@ Data used from [1.88 Million US Wildfires](https://www.kaggle.com/rtatman/188-mi
 #### Tools Used:  
 Python  
 SQL  
-Pandas  
-Matplotlib
-Seaborn
-BeautifulSoup
+Pandas  
+Matplotlib  
+Seaborn  
+BeautifulSoup  
 scikit-learn  
 GeoPandas  
 d3.js  
