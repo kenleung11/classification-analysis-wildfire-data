@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Wildfire Cause Predictor</title>
+  <link rel="stylesheet" href="static/d3.slider.css" />
+
+  <style>
+    #map{
+      height:400px;
+      width:30%;
+    }
+
+     body {
+       font-family: Verdana,Arial,sans-serif;
+     }
+
+     h1 {
+       font-size: 1.2em;
+       margin: 10px 5px;
+       color: gray
+     }
+
+     h2 {
+       font-size: 1.2em;
+       margin: 20px 5px;
+       color: gray
+     }
+
+     h3 {
+       font-size: 1.2em;
+       margin: 10px 5px;
+       color: gray
+     }
+
+     .space {
+       margin-bottom: 20 px;
+     }
+
+     .wrapper {
+       width: 80%;
+       margin-left: auto;
+       margin-right: auto;
+     }
+
+     #bar_chart {
+       margin-bottom: 0px;
+       margin-top: 10px;
+       width:100%;
+     }
+
+     .bar {
+       fill: #a3a6be;
+     }
+
+     .percent_text {
+     	font-style: 100;
+     }
+
+     span {
+       color: steelblue;
+     }
+
+     .grid{      
+     }
+
+     .gridcol{
+      position:absolute; 
+     }
+
+     #chart_area{
+      left:500px;
+      width:70%;
+     }
+
+     #sliders{
+      margin-top:420px;
+     }
+
+  </style>
+</head>
+<body>
+  <h1>Select the location of the fire:</h1>
+  <div class = grid>
+  <div class = "gridcol" id="map"></div>
+
+    <div class = "gridcol" id="chart_area" class="wrapper">
+      <h3>Cause of Fire:</h3>
+      <p class="space"></p>
+      <div id="bar_chart">
+      </div>
+    </div>
+  </div>
+
+    <div id="sliders" class="wrapper">
+
+      <h2 class="feature">Year: <span id="year">2015</span></h2>
+      <div id="year_slider"></div>
+
+      <h2 class="feature">Day of Year Discovered: <span id="doy">1</span></h2>
+      <div id="doy_slider"></div>
+
+      <h2 class="feature">Days Needed to Contain Fire: <span id="days">0</span></h2>
+      <div id="days_slider"></div>
+
+      <h2 class="feature">Size of Fire (hectares): <span id="size">1</span></h2>
+      <div id="size_slider"></div>
+
+    </div>
+
+  <!-- Import the libraries: jQuery, d3, d3.slider -->
+  <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+  <script src="http://d3js.org/d3.v3.min.js"></script>
+  <script src="static/d3.slider.js"></script>
+  <script>
+    function initMap(){
+      // Map options
+      var options = {
+        zoom:3,
+        center:{lat:39.1271,lng:-100.8480}
+      }
+
+      // New map
+      var map = new google.maps.Map(document.getElementById('map'), options);
+
+      // Listen for click on map
+      google.maps.event.addListener(map, 'click', function(event){
+        // Add marker
+        addMarker({coords:event.latLng});
+        var myLatLng = event.latLng;
+        // lat = myLatLng.lat();
+        // lng = myLatLng.lng();
+        current_lat = myLatLng.lat();
+        current_lng = myLatLng.lng();
+
+        var url = "http://maps.googleapis.com/maps/api/geocode/json?latlng="+current_lat+","+current_lng+"&sensor=false";
+
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", url, false);
+        xhr.send();
+
+        var api_dict = xhr.responseText;
+        var obj = JSON.parse(api_dict);
+        result=obj.results[0].address_components;
+          for(var i=0;i<result.length;++i)
+          {
+              if(result[i].types[0]=="administrative_area_level_1"){state = result[i].long_name}
+          };
+      	current_state = dict[state];
+        getAndDrawChance(current_year, current_doy, current_days, current_size, current_lat, current_lng, current_state)
+      });
+
+      // Add Marker Function
+      function addMarker(props){
+        var marker = new google.maps.Marker({
+          position:props.coords,
+          map:map,
+          //icon:props.iconImage
+        });
+
+        // Check for customicon
+        if(props.iconImage){
+          // Set icon image
+          marker.setIcon(props.iconImage);
+        }
+
+        // Check content
+        if(props.content){
+          var infoWindow = new google.maps.InfoWindow({
+            content:props.content
+          });
+
+          marker.addListener('click', function(){
+            infoWindow.open(map, marker);
+          });
+        }
+      }
+    }
+
+     <!-- SINGLE BAR CHART -->
+
+	 var dict = {'California':0, 'Montana':1, 'Colorado':2, 'Idaho':3, 'Michigan':4, 'Arizona':5, 'Washington':6, 'New Mexico':7, 'Wyoming':8, 'Oregon':9, 'Minnesota':10,
+       'Utah':11, 'Arkansas':12, 'Mississippi':13, 'Florida':14, 'Illinois':15, 'Alabama':16, 'South Dakota':17, 'Texas':18, 'South Carolina':19, 'Nevada':20, 'Georgia':21,
+       'North Carolina':22, 'Kentucky':23, 'Ohio':24, 'Virginia':25, 'Vermont':26, 'Oklahoma':27, 'Pennsylvania':28, 'Tennessee':29, 'Missouri':30, 'Louisiana':31, 'West Virginia':32,
+       'Wisconsin':33, 'Kansas':34, 'Indiana':35, 'North Dakota':36, 'Nebraska':37, 'New York':38, 'New Hampshire':39, 'Alaska':40, 'Maryland':41, 'District of Columbia':42, 'Hawaii':43,
+       'Iowa':44, 'Massachusetts':45, 'Maine':46, 'New Jersey':47, 'Puerto Rico':48,'Delaware':49, 'Rhode Island':50, 'Connecticut':51}
+
+
+     var current_lat = 39.1271;
+     var current_lng = -100.8480;
+     var current_state = 0;
+
+     var current_year = 2015; // FIRE_YEAR
+     var current_doy = 1; // DISCOVERY_DOY
+     var current_days = 0; // DAYS
+     var current_size = 1; // FIRE_SIZE
+
+     var prob_lightning = 0;
+     var prob_equipment = 0;
+     var prob_smoking = 0;
+     var prob_campfire = 0;
+     var prob_debris = 0;
+     var prob_railroad = 0;
+     var prob_arson = 0;
+     var prob_children = 0;
+     var prob_miscellaneous = 0;
+     var prob_fireworks = 0;
+     var prob_powerline = 0;
+     var prob_structure = 0;
+
+     height = 20;
+     bar_space = 5;
+
+     var chart = d3.select("#bar_chart")
+                   .append("svg:svg")
+                   .attr("width", '110%')
+                   .attr("height", 335); // canvas for the bar chart
+
+     var chance_scale = d3.scale.linear()
+                                .domain([0, 100])
+                                .range([0, 800]); // this is the scale of the slider bar
+
+     var bar = chart.append("g")
+                    .attr("class", "bar")
+
+       bar.append("svg:rect")
+          .attr("id", "chancebar1")
+          .attr("class", "bar")
+          .attr("y", 15)
+          .attr("width", chance_scale(prob_lightning))
+          .attr("height", height)
+
+     bar.append("text")
+        .attr("id", "percent_text1")
+        .attr("dy", ".75em")
+        .attr("y", 15)
+        .attr("x", chance_scale(prob_lightning-5))
+        .attr("text-anchor", "middle")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text( prob_lightning.toFixed(1) + "%");
+
+         bar.append("text")
+        .attr("id", "cause_text1")
+        .attr("dy", ".75em")
+        .attr("y", 15)
+        .attr("x", 10)
+        .attr("text-anchor", "left")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text("Lightning");
+
+       bar.append("svg:rect")
+          .attr("id", "chancebar2")
+          .attr("class", "bar")
+          .attr("y", 15+height+bar_space)
+          .attr("width", chance_scale(prob_equipment))
+          .attr("height", height);
+
+     bar.append("text")
+        .attr("id", "percent_text2")
+        .attr("dy", ".75em")
+        .attr("y", 15+height+bar_space)
+        .attr("x", chance_scale(prob_equipment-5))
+        .attr("text-anchor", "middle")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text( prob_equipment.toFixed(1) + "%");
+
+         bar.append("text")
+        .attr("id", "cause_text2")
+        .attr("dy", ".75em")
+        .attr("y", 15+height+bar_space)
+        .attr("x", 10)
+        .attr("text-anchor", "left")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text("Equipment Use");
+
+       bar.append("svg:rect")
+          .attr("id", "chancebar3")
+          .attr("class", "bar")
+          .attr("y", 15+(2*height)+(2*bar_space))
+          .attr("width", chance_scale(prob_smoking))
+          .attr("height", height);
+
+     bar.append("text")
+        .attr("id", "percent_text3")
+        .attr("dy", ".75em")
+        .attr("y", 15+(2*height)+(2*bar_space))
+        .attr("x", chance_scale(prob_smoking-5))
+        .attr("text-anchor", "middle")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text( prob_smoking.toFixed(1) + "%");
+
+         bar.append("text")
+        .attr("id", "cause_text3")
+        .attr("dy", ".75em")
+        .attr("y", 15+(2*height)+(2*bar_space))
+        .attr("x", 10)
+        .attr("text-anchor", "left")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text("Smoking");
+
+       bar.append("svg:rect")
+          .attr("id", "chancebar4")
+          .attr("class", "bar")
+          .attr("y", 15+(3*height)+(3*bar_space))
+          .attr("width", chance_scale(prob_campfire))
+          .attr("height", height);
+
+     bar.append("text")
+        .attr("id", "percent_text4")
+        .attr("dy", ".75em")
+        .attr("y", 15+(3*height)+(3*bar_space))
+        .attr("x", chance_scale(prob_campfire-5))
+        .attr("text-anchor", "middle")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text( prob_campfire.toFixed(1) + "%");
+
+        bar.append("text")
+        .attr("id", "cause_text4")
+        .attr("dy", ".75em")
+        .attr("y", 15+(3*height)+(3*bar_space))
+        .attr("x", 10)
+        .attr("text-anchor", "left")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text("Campfire");
+
+       bar.append("svg:rect")
+          .attr("id", "chancebar5")
+          .attr("class", "bar")
+          .attr("y", 15+(4*height)+(4*bar_space))
+          .attr("width", chance_scale(prob_debris))
+          .attr("height", height);
+
+     bar.append("text")
+        .attr("id", "percent_text5")
+        .attr("dy", ".75em")
+        .attr("y", 15+(4*height)+(4*bar_space))
+        .attr("x", chance_scale(prob_debris-5))
+        .attr("text-anchor", "middle")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text( prob_debris.toFixed(1) + "%");
+
+        bar.append("text")
+        .attr("id", "cause_text5")
+        .attr("dy", ".75em")
+        .attr("y", 15+(4*height)+(4*bar_space))
+        .attr("x", 10)
+        .attr("text-anchor", "left")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text("Debris Burning");
+
+       bar.append("svg:rect")
+          .attr("id", "chancebar6")
+          .attr("class", "bar")
+          .attr("y", 15+(5*height)+(5*bar_space))
+          .attr("width", chance_scale(prob_railroad))
+          .attr("height", height);
+
+     bar.append("text")
+        .attr("id", "percent_text6")
+        .attr("dy", ".75em")
+        .attr("y", 15+(5*height)+(5*bar_space))
+        .attr("x", chance_scale(prob_railroad-5))
+        .attr("text-anchor", "middle")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text( prob_railroad.toFixed(1) + "%"); 
+
+        bar.append("text")
+        .attr("id", "cause_text6")
+        .attr("dy", ".75em")
+        .attr("y", 15+(5*height)+(5*bar_space))
+        .attr("x", 10)
+        .attr("text-anchor", "left")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text("Railroad");
+
+       bar.append("svg:rect")
+          .attr("id", "chancebar7")
+          .attr("class", "bar")
+          .attr("y", 15+(6*height)+(6*bar_space))
+          .attr("width", chance_scale(prob_arson))
+          .attr("height", height);
+
+     bar.append("text")
+        .attr("id", "percent_text7")
+        .attr("dy", ".75em")
+        .attr("y", 15+(6*height)+(6*bar_space))
+        .attr("x", chance_scale(prob_arson-5))
+        .attr("text-anchor", "middle")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text( prob_arson.toFixed(1) + "%");
+
+        bar.append("text")
+        .attr("id", "cause_text7")
+        .attr("dy", ".75em")
+        .attr("y", 15+(6*height)+(6*bar_space))
+        .attr("x", 10)
+        .attr("text-anchor", "left")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text("Arson");
+
+       bar.append("svg:rect")
+          .attr("id", "chancebar8")
+          .attr("class", "bar")
+          .attr("y", 15+(7*height)+(7*bar_space))
+          .attr("width", chance_scale(prob_children))
+          .attr("height", height);
+
+     bar.append("text")
+        .attr("id", "percent_text8")
+        .attr("dy", ".75em")
+        .attr("y", 15+(7*height)+(7*bar_space))
+        .attr("x", chance_scale(prob_children-5))
+        .attr("text-anchor", "middle")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text( prob_children.toFixed(1) + "%");
+
+        bar.append("text")
+        .attr("id", "cause_text8")
+        .attr("dy", ".75em")
+        .attr("y", 15+(7*height)+(7*bar_space))
+        .attr("x", 10)
+        .attr("text-anchor", "left")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text("Children");
+
+       bar.append("svg:rect")
+          .attr("id", "chancebar9")
+          .attr("class", "bar")
+          .attr("y", 15+(8*height)+(8*bar_space))
+          .attr("width", chance_scale(prob_miscellaneous))
+          .attr("height", height);
+
+     bar.append("text")
+        .attr("id", "percent_text9")
+        .attr("dy", ".75em")
+        .attr("y", 15+(8*height)+(8*bar_space))
+        .attr("x", chance_scale(prob_miscellaneous-5))
+        .attr("text-anchor", "middle")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text( prob_miscellaneous.toFixed(1) + "%");
+
+        bar.append("text")
+        .attr("id", "cause_text9")
+        .attr("dy", ".75em")
+        .attr("y", 15+(8*height)+(8*bar_space))
+        .attr("x", 10)
+        .attr("text-anchor", "left")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text("Miscellaneous");
+
+       bar.append("svg:rect")
+          .attr("id", "chancebar10")
+          .attr("class", "bar")
+          .attr("y", 15+(9*height)+(9*bar_space))
+          .attr("width", chance_scale(prob_fireworks))
+          .attr("height", height);
+
+     bar.append("text")
+        .attr("id", "percent_text10")
+        .attr("dy", ".75em")
+        .attr("y", 15+(9*height)+(9*bar_space))
+        .attr("x", chance_scale(prob_fireworks-5))
+        .attr("text-anchor", "middle")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text( prob_fireworks.toFixed(1) + "%");
+
+        bar.append("text")
+        .attr("id", "cause_text10")
+        .attr("dy", ".75em")
+        .attr("y", 15+(9*height)+(9*bar_space))
+        .attr("x", 10)
+        .attr("text-anchor", "left")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text("Fireworks");
+
+       bar.append("svg:rect")
+          .attr("id", "chancebar11")
+          .attr("class", "bar")
+          .attr("y", 15+(10*height)+(10*bar_space))
+          .attr("width", chance_scale(prob_powerline))
+          .attr("height", height);
+
+     bar.append("text")
+        .attr("id", "percent_text11")
+        .attr("dy", ".75em")
+        .attr("y", 15+(10*height)+(10*bar_space))
+        .attr("x", chance_scale(prob_powerline-5))
+        .attr("text-anchor", "middle")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text( prob_powerline.toFixed(1) + "%");
+
+        bar.append("text")
+        .attr("id", "cause_text11")
+        .attr("dy", ".75em")
+        .attr("y", 15+(10*height)+(10*bar_space))
+        .attr("x", 10)
+        .attr("text-anchor", "left")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text("Powerline");
+
+       bar.append("svg:rect")
+          .attr("id", "chancebar12")
+          .attr("class", "bar")
+          .attr("y", 15+(11*height)+(11*bar_space))
+          .attr("width", chance_scale(prob_structure))
+          .attr("height", height);
+
+     bar.append("text")
+        .attr("id", "percent_text12")
+        .attr("dy", ".75em")
+        .attr("y", 15+(11*height)+(11*bar_space))
+        .attr("x", chance_scale(prob_structure-5))
+        .attr("text-anchor", "middle")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text( prob_structure.toFixed(1) + "%");
+
+        bar.append("text")
+        .attr("id", "cause_text12")
+        .attr("dy", ".75em")
+        .attr("y", 15+(11*height)+(11*bar_space))
+        .attr("x", 10)
+        .attr("text-anchor", "left")
+        .attr("fill", "gray")
+        .attr("font-size", 20)
+        .text("Structure");
+
+     <!-- FUNCTION TO GET CHANCE FROM YOUR PREDICTOR WITH AJAX AND CHANGE BAR  HEIGHT -->
+     function getAndDrawChance(year, doy, days, size, lat, lng, state){
+
+       $.ajax({
+         type: "POST",
+         contentType: "application/json; charset=utf-8",
+         url: "/score",
+         dataType: "json",
+         async: true,
+         data: "{\"example\": ["+year+","+doy+","+days+","+size+","+lat+","+lng+","+state+"]}",
+         success: function (data) {
+           // var prediction = data["prediction"];
+           // d3.select("#chancebar")
+           //   .attr("width", chance_scale(current_prob));
+           // d3.select("#percent_text")
+           //   .attr("x", chance_scale(current_prob-5))
+           //   .text(prediction);
+		       var chance1 = 100 * data["Lightning"];
+           var chance2 = 100 * data["Equipment Use"];
+           var chance3 = 100 * data["Smoking"];
+           var chance4 = 100 * data["Campfire"];
+           var chance5 = 100 * data["Debris Burning"];
+           var chance6 = 100 * data["Railroad"];
+           var chance7 = 100 * data["Arson"];
+           var chance8 = 100 * data["Children"];
+           var chance9 = 100 * data["Miscellaneous"];
+           var chance10 = 100 * data["Fireworks"];
+           var chance11 = 100 * data["Powerline"];
+           var chance12 = 100 * data["Structure"];
+
+           d3.select("#chancebar1")
+             .attr("width", chance_scale(chance1));
+           d3.select("#percent_text1")
+             .attr("x", chance_scale(chance1+5))
+             .text(chance1.toFixed(1) + "%");
+           d3.select("#cause_text1")
+             .attr("x", chance_scale(chance1+10));
+
+           d3.select("#chancebar2")
+             .attr("width", chance_scale(chance2));
+           d3.select("#percent_text2")
+             .attr("x", chance_scale(chance2+5))
+             .text(chance2.toFixed(1) + "%");
+           d3.select("#cause_text2")
+             .attr("x", chance_scale(chance2+10));
+
+           d3.select("#chancebar3")
+             .attr("width", chance_scale(chance3));
+           d3.select("#percent_text3")
+             .attr("x", chance_scale(chance3+5))
+             .text(chance3.toFixed(1) + "%");
+           d3.select("#cause_text3")
+             .attr("x", chance_scale(chance3+10));
+
+           d3.select("#chancebar4")
+             .attr("width", chance_scale(chance4));
+           d3.select("#percent_text4")
+             .attr("x", chance_scale(chance4+5))
+             .text(chance4.toFixed(1) + "%");
+           d3.select("#cause_text4")
+             .attr("x", chance_scale(chance4+10));
+
+           d3.select("#chancebar5")
+             .attr("width", chance_scale(chance5));
+           d3.select("#percent_text5")
+             .attr("x", chance_scale(chance5+5))
+             .text(chance5.toFixed(1) + "%");
+           d3.select("#cause_text5")
+             .attr("x", chance_scale(chance5+10));
+
+           d3.select("#chancebar6")
+             .attr("width", chance_scale(chance6));
+           d3.select("#percent_text6")
+             .attr("x", chance_scale(chance6+5))
+             .text(chance6.toFixed(1) + "%");
+           d3.select("#cause_text6")
+             .attr("x", chance_scale(chance6+10)); 
+
+           d3.select("#chancebar7")
+             .attr("width", chance_scale(chance7));
+           d3.select("#percent_text7")
+             .attr("x", chance_scale(chance7+5))
+             .text(chance7.toFixed(1) + "%");
+           d3.select("#cause_text7")
+             .attr("x", chance_scale(chance7+10));
+
+           d3.select("#chancebar8")
+             .attr("width", chance_scale(chance8));
+           d3.select("#percent_text8")
+             .attr("x", chance_scale(chance8+5))
+             .text(chance8.toFixed(1) + "%");
+           d3.select("#cause_text8")
+             .attr("x", chance_scale(chance8+10)); 
+
+           d3.select("#chancebar9")
+             .attr("width", chance_scale(chance9));
+           d3.select("#percent_text9")
+             .attr("x", chance_scale(chance9+5))
+             .text(chance9.toFixed(1) + "%");
+           d3.select("#cause_text9")
+             .attr("x", chance_scale(chance9+10));
+
+           d3.select("#chancebar10")
+             .attr("width", chance_scale(chance10));
+           d3.select("#percent_text10")
+             .attr("x", chance_scale(chance10+5))
+             .text(chance10.toFixed(1) + "%");
+           d3.select("#cause_text10")
+             .attr("x", chance_scale(chance10+10));
+
+           d3.select("#chancebar11")
+             .attr("width", chance_scale(chance11));
+           d3.select("#percent_text11")
+             .attr("x", chance_scale(chance11+5))
+             .text(chance11.toFixed(1) + "%");
+           d3.select("#cause_text11")
+             .attr("x", chance_scale(chance11+10));
+
+           d3.select("#chancebar12")
+             .attr("width", chance_scale(chance12));
+           d3.select("#percent_text12")
+             .attr("x", chance_scale(chance12+5))
+             .text(chance12.toFixed(1) + "%"); 
+           d3.select("#cause_text12")
+             .attr("x", chance_scale(chance12+10));
+         },
+         error: function (result) {
+         }
+       })
+     }
+
+
+     <!-- SLIDERS -->
+
+     d3.select('#year_slider')
+       .call(
+         d3.slider()
+           .value(current_year)
+           .min(1992)
+           .max(2015)
+           .step(1)
+           .axis(true)
+           .on("slide", function(evt,value) {
+             d3.select('#year').text(value);
+             current_year = value;
+             getAndDrawChance(current_year, current_doy, current_days, current_size, current_lat, current_lng, current_state)
+           }
+           )
+       );
+
+     d3.select('#doy_slider')
+       .call(
+         d3.slider()
+           .value(current_doy)
+           .min(1)
+           .max(365)
+           .step(1)
+           .axis(true)
+           .on("slide", function(evt,value) {
+             d3.select('#doy').text(value);
+             current_doy = value;
+             getAndDrawChance(current_year, current_doy, current_days, current_size, current_lat, current_lng, current_state)
+           }
+           )
+       );
+
+     d3.select('#days_slider')
+       .call(
+         d3.slider()
+           .value(current_days)
+           .min(0)
+           .max(30)
+           .step(1)
+           .axis(true)
+           .on("slide", function(evt,value) {
+             d3.select('#days').text(value);
+             current_days = value;
+             getAndDrawChance(current_year, current_doy, current_days, current_size, current_lat, current_lng, current_state)
+           }
+           )
+       );
+
+     d3.select('#size_slider')
+       .call(
+         d3.slider()
+           .value(current_size)
+           .min(1)
+           .max(150)
+           .step(1)
+           .axis(true)
+           .on("slide", function(evt,value) {
+             d3.select('#size').text(value);
+             current_size = value;
+             getAndDrawChance(current_year, current_doy, current_days, current_size, current_lat, current_lng, current_state)
+           }
+           )
+       );
+
+  </script>
+  <script async defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCNKZUfRXtwTIQaKBYACe7Hyw6Cvkjcp6M&callback=initMap">
+    </script>
+</body>
+</html>
