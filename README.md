@@ -18,6 +18,7 @@ scikit-learn
 GeoPandas  
 d3.js  
 Flask  
+Google Maps API
 
 ***
 
