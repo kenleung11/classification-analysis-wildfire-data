@@ -22,4 +22,4 @@ Google Maps API
 
 ***
 
-#### Check out my blog [What causes wildfires in the US?](https://kennythedatascientist.weebly.com/)
+#### Check out my blog [What causes wildfires in the US?](https://kennythedatascientist.weebly.com/blog/what-causes-wildfires-in-the-us)
